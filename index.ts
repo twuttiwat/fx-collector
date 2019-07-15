@@ -72,7 +72,7 @@ const fxIndicators: CurrencyExchange[] = [
   USDCAD,
   USDCHF,
   USDJPY
-];
+]; 
 /*
 zip( timer(0, 1 * 1000), from(fxIndicators) )
 .subscribe(
