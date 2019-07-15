@@ -1,6 +1,12 @@
 import { of, from, timer, zip, fromEvent } from 'rxjs';
-import { map, mergeMap, tap, first, take, switchMap } from 'rxjs/operators';
+import {
+  map, mergeMap, tap, first, take, switchMap, scan, reduce
+  , takeUntil
+} from 'rxjs/operators';
 import { ajax } from 'rxjs/ajax';
+
+import * as firebase from 'firebase';
+
 
 const ALPHA_VANTAGE_API_KEY = 'I89D9W67H9TP10N5'
 
@@ -43,7 +49,7 @@ const USDCAD: CurrencyExchange = ['USD', 'CAD'];
 const USDCHF: CurrencyExchange = ['USD', 'CHF'];
 const USDJPY: CurrencyExchange = ['USD', 'JPY'];
 
-const fxIndicators: CurrencyExchange[] = [
+const fxProdIndicators: CurrencyExchange[] = [
   AUDCAD,
   AUDCHF,
   AUDJPY,
@@ -74,42 +80,108 @@ const fxIndicators: CurrencyExchange[] = [
   USDJPY
 ];
 
-const API_INTERVAL = 15;
+const fxTestIndicators = [
+  USDCHF,
+  USDJPY
+];
+
+const fxIndicators = fxProdIndicators;
+
+const API_PROD_INTERVAL = 15;
+const API_TEST_INTERVAL = 1;
+const API_INTERVAL = API_PROD_INTERVAL;
 
 const button = document.querySelector('button');
-
+const mouseup$ = fromEvent(document, 'mouseup');
 const click$ = fromEvent(button, 'click');
+//.pipe( takeUntil(mouseup$) );
+
 const apiInterval$ = timer(0, API_INTERVAL * 1000);
 const fxIndicator$ = from(fxIndicators);
 
-const fxInterval$ = click$.pipe(
-  switchMap( _ => zip( apiInterval$, fxIndicator$ ))
+const clickFxInterval$ = click$.pipe(
+  switchMap(_ => zip(apiInterval$, fxIndicator$))
 );
+
+const fxInterval$ = zip(apiInterval$, fxIndicator$);
 
 /*
 fxInterval$.subscribe(
   ([time, fx]) => console.log(`${time} ${fx}`),
-  e => console.error(e),
+  error => console.log(error),
   () => console.log('Done! Yay!')
   );
 */
 
 const makeApiCall = (fx: CurrencyExchange) => {
 
-    const fxRateUrl = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=${fx[0]}&to_currency=${fx[1]}&apikey=${ALPHA_VANTAGE_API_KEY}`;
+  const fxRateUrl = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=${fx[0]}&to_currency=${fx[1]}&apikey=${ALPHA_VANTAGE_API_KEY}`;
 
-    return ajax.getJSON(fxRateUrl);
+  return ajax.getJSON(fxRateUrl);
 
 }
 
+// Your web app's Firebase configuration
+var firebaseConfig = {
+  apiKey: "AIzaSyB2Lrb2S9Svu4Y2pajBeepkQbFk6qlDP5I",
+  authDomain: "auto-trader-c66fc.firebaseapp.com",
+  databaseURL: "https://auto-trader-c66fc.firebaseio.com",
+  projectId: "auto-trader-c66fc",
+  storageBucket: "",
+  messagingSenderId: "643352729277",
+  appId: "1:643352729277:web:6273d3bfa2416957"
+};
+
+console.log('fb config set');
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+
+console.log('fb init app', firebase);
+
+// Get a reference to the database service
+var database = firebase.database();
+
+console.log('fb get database', database);
+
+const writeIndicator = (indicator: number) => {
+  
+  console.log('fb start write indicator');
+
+  const newIndicatorRef = firebase.database().ref('indicators').push();
+
+  console.log('fb push indicator');
+
+  return newIndicatorRef.set({
+    timestamp: firebase.database.ServerValue.TIMESTAMP,
+    value: indicator
+  });
+
+}
+
+const FACTOR = 1000.0;
+
 fxInterval$.pipe(
   mergeMap(([_, fx]) => makeApiCall(fx)),
-  map(fxRateResp => fxRateResp['Realtime Currency Exchange Rate'])
+  map(fxRateResp =>
+    fxRateResp['Realtime Currency Exchange Rate']['5. Exchange Rate']),
+  tap(rate => console.log(rate)),
+  reduce((rateAccumulated, currentRate) => rateAccumulated + Number(currentRate), 0),
+  map(rateAccumulated => rateAccumulated * FACTOR),
+  mergeMap(writeIndicator)
 )
   .subscribe(
-    fxRate => console.log(fxRate),
+    result => console.log('result ', result),
     err => console.error(err),
     () => console.log('Done! Yay!')
   );
- 
 
+
+/*
+click$
+  .subscribe(
+    result => console.log('result ', result),
+    err => console.error(err),
+    () => console.log('Done! Yay!')
+  );
+*/
