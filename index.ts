@@ -1,5 +1,5 @@
-import { of, from, timer, zip } from 'rxjs';
-import { map, mergeMap, tap, first, take } from 'rxjs/operators';
+import { of, from, timer, zip, fromEvent } from 'rxjs';
+import { map, mergeMap, tap, first, take, switchMap } from 'rxjs/operators';
 import { ajax } from 'rxjs/ajax';
 
 const ALPHA_VANTAGE_API_KEY = 'I89D9W67H9TP10N5'
@@ -72,34 +72,44 @@ const fxIndicators: CurrencyExchange[] = [
   USDCAD,
   USDCHF,
   USDJPY
-]; 
+];
+
+const API_INTERVAL = 15;
+
+const button = document.querySelector('button');
+
+const click$ = fromEvent(button, 'click');
+const apiInterval$ = timer(0, API_INTERVAL * 1000);
+const fxIndicator$ = from(fxIndicators);
+
+const fxInterval$ = click$.pipe(
+  switchMap( _ => zip( apiInterval$, fxIndicator$ ))
+);
+
 /*
-zip( timer(0, 1 * 1000), from(fxIndicators) )
-.subscribe(
+fxInterval$.subscribe(
   ([time, fx]) => console.log(`${time} ${fx}`),
   e => console.error(e),
   () => console.log('Done! Yay!')
   );
 */
 
-zip(timer(0, 20 * 1000), from(fxIndicators)).pipe(
-  //tap(console.log),
-  //take(2),
-  mergeMap(([_, fx]) => {
+const makeApiCall = (fx: CurrencyExchange) => {
 
     const fxRateUrl = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=${fx[0]}&to_currency=${fx[1]}&apikey=${ALPHA_VANTAGE_API_KEY}`;
 
-    return ajax.getJSON(fxRateUrl)
+    return ajax.getJSON(fxRateUrl);
 
-  }),
-  //tap(console.log),
+}
+
+fxInterval$.pipe(
+  mergeMap(([_, fx]) => makeApiCall(fx)),
   map(fxRateResp => fxRateResp['Realtime Currency Exchange Rate'])
-);
-/*
+)
   .subscribe(
     fxRate => console.log(fxRate),
     err => console.error(err),
     () => console.log('Done! Yay!')
   );
-  */
+ 
 
