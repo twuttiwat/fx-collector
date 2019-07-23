@@ -159,12 +159,20 @@ const writeIndicator = (indicator: number) => {
 
 }
 
-const FACTOR = 1000.0;
+const FACTOR = 1.0;
 
 fxInterval$.pipe(
   mergeMap(([_, fx]) => makeApiCall(fx)),
-  map(fxRateResp =>
-    fxRateResp['Realtime Currency Exchange Rate']['5. Exchange Rate']),
+  map(fxRateResp => {
+          const fxRateObj = fxRateResp['Realtime Currency Exchange Rate'];
+          if (fxRateObj['1. From_Currency Code'] === 'JPY' || 
+              fxRateObj['3. To_Currency Code'] === 'JPY') {
+            return fxRateObj['5. Exchange Rate'] / 100.0;
+          } else {
+            return fxRateObj['5. Exchange Rate'];
+          }
+        }
+      ),
   tap(rate => console.log(rate)),
   reduce((rateAccumulated, currentRate) => rateAccumulated + Number(currentRate), 0),
   map(rateAccumulated => rateAccumulated * FACTOR),
